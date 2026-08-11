@@ -27,7 +27,7 @@ Build guidance:
 - Do not copy application code or model weights into the image.
 - Set the container entrypoint to `sleep infinity` so the container stays alive and accepts SSH connections after AutoDL starts it.
 
-Publishing: Push the built image to a registry AutoDL prefers (e.g. Alibaba Cloud Container Registry) or Docker Hub.
+Publishing: Push the built image to Docker Hub (e.g. `docker.io/<username>/inference-service:latest`). Docker Hub free tier allows one private repository and up to 2 GB/day bandwidth, which is sufficient for this lightweight image.
 
 Verification checkpoint: Confirm the pushed image is discoverable in the AutoDL console under custom images.
 

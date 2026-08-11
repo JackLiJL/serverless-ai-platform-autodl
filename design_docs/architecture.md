@@ -19,15 +19,15 @@ Verification checkpoint: Run the service locally (e.g. with Uvicorn) and confirm
 
 ## Module 2 — Custom Image Build (AutoDL Image Builder)
 
-Responsibilities: Produce a container image that AutoDL can start directly (AutoDL instances run containers themselves and do not support nested Docker). The image must contain the runtime, Python dependencies, and optionally pre-downloaded model weights.
+Responsibilities: Produce a lightweight container image that AutoDL can start directly. The image contains only the runtime environment (PyTorch/CUDA, Python, and pip dependencies) — no application code and no model weights. This keeps the image small (~2 GB), fitting within free-tier registry quotas.
 
 Build guidance:
 - Base the image on an appropriate PyTorch/CUDA runtime if GPU support is needed.
 - Install dependencies from `requirements.txt` using a reliable mirror.
-- Optionally pre-download model weights during image build to reduce cold-start time at the expense of larger image size. If you avoid baking weights into the image, use a startup script to download them on first run.
-- Copy the `app/` and `scripts/` into the image, ensure the startup script is executable, expose the serving port, and set the entrypoint to the startup script.
+- Do not copy application code or model weights into the image.
+- Set the container entrypoint to `sleep infinity` so the container stays alive and accepts SSH connections after AutoDL starts it.
 
-Publishing: Push the built image to a registry AutoDL prefers (the document suggests the Alibaba Cloud registry for best pull performance on AutoDL) or Docker Hub.
+Publishing: Push the built image to a registry AutoDL prefers (e.g. Alibaba Cloud Container Registry) or Docker Hub.
 
 Verification checkpoint: Confirm the pushed image is discoverable in the AutoDL console under custom images.
 
@@ -38,11 +38,20 @@ Verification checkpoint: Confirm the pushed image is discoverable in the AutoDL 
 Responsibilities: Create, monitor, and destroy AutoDL instances through the AutoDL v2 API to ensure resources are provisioned for tests or ephemeral workloads and fully released afterward.
 
 Implementation highlights:
-- Implement a small client that calls AutoDL API endpoints to create an instance with a given image, poll instance status until `running`, retrieve SSH credentials or instance IP, and destroy the instance when work finishes.
+- Implement a small client that calls AutoDL API endpoints to create an instance with the lightweight base image, poll instance status until `running`, retrieve SSH credentials or instance IP, and destroy the instance when work finishes.
 - Provide a `wait_for_running` loop with a timeout and backoff to handle provisioning delays.
 
 Deployment/SSH automation:
-- If your custom image already contains the application and startup logic, you only need to issue a restart via SSH or API. If not, automate code upload with `scp`/`rsync` (or `sshpass` in CI) and start the service remotely.
+- After the instance is running, SSH into the container.
+- Clone the application code repository inside the container.
+- Check if model weights already exist; if not, download them from HuggingFace (optionally using `HF_ENDPOINT=https://hf-mirror.com` for domestic mirror acceleration when the AutoDL node is in an overseas region).
+- Start the FastAPI service in the background (e.g. via `nohup`).
+- The lifecycle manager orchestrates this entire sequence as part of the deployment workflow.
+
+Key considerations:
+- Because the instance is fully destroyed after each run, the data disk is wiped. The model must be re-downloaded on every startup — the existence check (`if [ ! -d "$MODEL_DIR" ]`) will always be true.
+- Health checks must account for the model download time (5–10 minutes). Use a generous retry window (10–15 minutes) in the CI/CD pipeline before marking the deployment as failed.
+- Optional optimization: If download time or bandwidth is a concern, a first manual run can leave the instance in "stop" (not destroy) mode with the data disk preserved, so subsequent starts skip the download. However, this requires not calling the destroy endpoint, which conflicts with the "用完即焚" (teardown after use) approach.
 
 Verification checkpoint: From your development machine, run the lifecycle script to create and then destroy a test instance (use the cheapest CPU instance for API validation to avoid costs).
 
@@ -50,17 +59,20 @@ Verification checkpoint: From your development machine, run the lifecycle script
 
 ## Module 4 — CI/CD Pipeline (GitHub Actions)
 
-Responsibilities: Wire the image build, instance creation, functional verification, and teardown into an automated pipeline that can be triggered on push or manually.
+Responsibilities: Wire the image build, instance creation, code/model setup via SSH, functional verification, and teardown into an automated pipeline that can be triggered on push or manually.
 
 Workflow guidance:
-- Checkout the repository, build and push the image to the selected registry.
-- Use the lifecycle manager to create an instance with the new image.
-- Wait for the instance to become healthy, then run quick inference calls against `/predict` to validate functionality.
+- Build and push the lightweight runtime image to the container registry.
+- Use the lifecycle manager to create an AutoDL instance with that image.
+- SSH into the running container and run the setup sequence: clone the code repo, check if model exists (download if missing), start the service.
+- Wait for the model to download (5–10 min) and load into GPU memory. Use a generous retry loop (10–15 minutes, checking `/health` every 30–60 seconds) before failing.
+- Run quick inference calls against `/predict` to validate functionality.
 - Destroy the instance as the final step to ensure no resources remain allocated.
+- Use a manual approval gate between the test step and teardown so the instance can be inspected or manually used before destruction.
 
-Secrets and configuration: Store `AUTODL_TOKEN` and any registry credentials in GitHub Secrets. Parameterize the image identifier used for deployment.
+Secrets and configuration: Store `AUTODL_TOKEN`, SSH password, HuggingFace token, and any registry credentials in GitHub Secrets. Parameterize the image identifier and model name used for deployment.
 
-Verification checkpoint: Add `AUTODL_TOKEN` to GitHub Secrets and trigger the workflow to verify the create → test → destroy cycle executes end-to-end.
+Verification checkpoint: Add secrets to GitHub Secrets and trigger the workflow to verify the create → SSH setup → test → destroy cycle executes end-to-end.
 
 ---
 
@@ -90,4 +102,3 @@ Verification checkpoint: During a running test, query the Grafana Explore view f
 Optional follow-ups I can implement for you:
 - Generate a minimal runnable `inference-service` scaffold (application layout, `requirements.txt`, and a `startup.sh` script) and add it to the repository.
 - Create the lifecycle manager script and a GitHub Actions workflow stub in `.github/workflows/`.
-

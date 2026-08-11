@@ -44,8 +44,22 @@ MODEL_DIR=/path/to/model uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### Docker
 
 ```bash
-docker build --build-arg MODEL_NAME=Qwen3-0.6B -t inference-service:latest .
-docker run -p 8000:8000 inference-service:latest
+# Build image (no model — just runtime + code, ~2GB)
+docker build -t inference-service:latest .
+
+# Run with model downloaded at startup
+docker run -p 8000:8000 \
+  -e MODEL_NAME=Qwen3-0.6B \
+  inference-service:latest
+```
+
+Optionally use HuggingFace mirror for faster downloads (China-based AutoDL nodes):
+
+```bash
+docker run -p 8000:8000 \
+  -e MODEL_NAME=Qwen3-0.6B \
+  -e HF_ENDPOINT=https://hf-mirror.com \
+  inference-service:latest
 ```
 
 ### Test

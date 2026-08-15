@@ -13,7 +13,7 @@ provider "grafana" {
 }
 
 module "inference_monitoring" {
-  source = "./modules/inference-monitoring"
+  source = "./inference-monitoring"
 
   grafana_url               = var.grafana_url
   grafana_token             = var.grafana_token

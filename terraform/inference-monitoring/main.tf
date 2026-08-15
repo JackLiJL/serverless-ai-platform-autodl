@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    grafana = {
+      source  = "grafana/grafana"
+      version = ">= 2.9.0"
+    }
+  }
+}
+
 # Grafana folder for Inference Service
 resource "grafana_folder" "inference" {
   title = "Inference Service"

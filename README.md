@@ -24,11 +24,57 @@ A serverless AI inference platform designed to run on AutoDL cloud GPUs.
     │   ├── model.py      # Model loader
     │   └── metrics.py    # Prometheus metrics
     ├── scripts/
-    │   └── startup.sh
+    │   └── deploy_autodl.sh
+    |   └── startup.sh
     ├── requirements.txt
     ├── Dockerfile
     └── README.md
 ```
+
+## Monitoring
+
+A local Prometheus container with remote write to Grafana Cloud is provided in `monitoring/`.
+
+### Prerequisites
+1. SSH tunnel to AutoDL instance:
+   ```bash
+   ssh -CNg -L 8000:127.0.0.1:8000 root@<autodl_ip> -p <ssh_port>
+   ```
+
+2. Grafana Cloud credentials (get from Grafana Cloud → Connections → Prometheus):
+   - `GF_PROMETHEUS_URL` — your push endpoint
+   - `GF_USER` — your username/email
+   - `GF_API_KEY` — an API key with write permissions
+
+### Start Prometheus locally
+```bash
+cd monitoring
+
+# Build (includes gettext-base for envsubst; env vars are substituted at startup)
+# Example: build with a local tag `my-prometheus`
+docker build -t my-prometheus .
+
+# Run with env vars. NOTE: if your working directory contains spaces, quote the path.
+docker run -d \
+  --name prometheus \
+  -p 9091:9090 \
+  -v "$(pwd)/.env:/etc/prometheus/.env:ro" \
+  --env-file "$(pwd)/.env" \
+  my-prometheus
+```
+
+### Access
+| Service | URL |
+|---------|-----|
+| Prometheus UI | http://localhost:9091 |
+| Grafana Cloud | https://grafana.com |
+
+### Verify
+- Check scrape targets: http://localhost:9091/targets (should show `inference-service` as UP)
+- Check remote write: http://localhost:9091/config (scroll to `remote_write`)
+- View metrics in Grafana Cloud Explore
+
+---
 
 ## Quick Start
 
@@ -61,6 +107,11 @@ docker run -p 8000:8000 \
   -e HF_ENDPOINT=https://hf-mirror.com \
   inference-service:latest
 ```
+
+### CI/CD notes
+
+- The repository's GitHub Actions workflow (`.github/workflows/docker-build-push.yml`) now generates a timestamp-style Docker tag of the form `YYYYMMDD-HHMMSS` and uses that as the primary image tag pushed to the registry. If you build/push from the default branch the workflow can also push the `latest` tag.
+- When referring to CI-pushed images in deployment manifests, prefer the timestamp tag (stable immutable reference) or `latest` for convenience.
 
 ### Test
 

@@ -9,6 +9,9 @@ env:
   INFERENCE_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/inference-service
   MONITORING_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/prometheus
   DOCKER_BUILDKIT: 1
+  TF_VAR_grafana_url: ${{ secrets.GRAFANA_URL }}
+  TF_VAR_grafana_token: ${{ secrets.GRAFANA_TOKEN }}
+  TF_VAR_prometheus_datasource_uid: ${{ secrets.PROMETHEUS_DATASOURCE_UID }}
 
 jobs:
   build-and-push:
@@ -54,10 +57,7 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform
-    env:
-      TF_VAR_grafana_url: ${{ secrets.GRAFANA_URL }}
-      TF_VAR_grafana_token: ${{ secrets.GRAFANA_TOKEN }}
-      TF_VAR_prometheus_datasource_uid: ${{ secrets.PROMETHEUS_DATASOURCE_UID }}
+    # Terraform variables are provided at the workflow top-level `env` for consistency
 
     steps:
       - name: Checkout code

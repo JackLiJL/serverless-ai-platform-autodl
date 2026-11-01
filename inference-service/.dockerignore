@@ -1,0 +1,9 @@
+# Keep test files, dev-only files, and virtualenv out of the Docker image
+app/tests/
+integration/
+requirements-dev.txt
+pytest.ini
+venv/
+__pycache__/
+*.pyc
+.env

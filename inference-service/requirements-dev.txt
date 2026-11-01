@@ -1,0 +1,8 @@
+# Test-only dependencies — production deps come from requirements.txt
+-r requirements.txt
+
+pytest>=8.0
+# TestClient in Starlette/FastAPI requires httpx
+httpx>=0.27
+# Integration tests use requests against the live container
+requests>=2.31

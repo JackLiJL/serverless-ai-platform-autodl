@@ -145,14 +145,19 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform
+    env:
+      # R2 S3-compatible credentials — mapped to the AWS env vars that
+      # the Terraform S3 backend reads during `terraform init`.
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.11.4"
 
       - name: Terraform Init
         run: terraform init
